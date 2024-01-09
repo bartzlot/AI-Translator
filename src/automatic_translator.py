@@ -6,12 +6,14 @@ from pynput import keyboard
 import subprocess
 import rumps
 import threading
+import json
 
 load_dotenv()
-LANGUAGE = os.getenv('TRANSLATE_LAN')
+starting_language = os.getenv('TRANSLATE_LAN')
 KEY = os.getenv('API_KEY')
 SYSTEM = os.name
 ICON_PATH = pathlib.Path(__file__).parent.parent / "assets" / "icon.png"
+LAN_MENU_PATH = pathlib.Path(__file__).parent.parent / "assets" / "language_menu.json"
 
 #There you can specifty your shortcut for translation of the clipboard [Default: CTRL + SHIFT + T]
 COMBINATION = {keyboard.Key.ctrl, keyboard.Key.shift, keyboard.KeyCode.from_char('t')}
@@ -22,11 +24,11 @@ openai.api_key = KEY
 
 class macOS_app(rumps.App):
 
-    def __init__(self):
+    def __init__(self, lan):
 
         super(macOS_app, self).__init__("AiTranslator", icon=str(ICON_PATH))
-
-        self.lan_menu = ["English", "Japanese"]
+        self.selected_language = lan
+        self.load_lan_menu()
         self.setup_lan_menu()
         self.menu = ["Insert GPT-KEY", "Add Language"]
 
@@ -49,21 +51,27 @@ class macOS_app(rumps.App):
 
             language_item = rumps.MenuItem(language, callback=self.select_language)
             lan_menu.add(language_item)
-
+        self.save_lan_menu()
         self.menu.add(lan_menu)
 
 
     def select_language(self, sender): #TODO Transfer language selection to .json file and remove this from .env
 
-        selected_lan = sender.title
-        LANGUAGE = selected_lan
-
+        self.selected_lan = sender.title
+        
     
-    # def creating_menu_from_list(self):
+    def save_lan_menu(self):
 
-    #     for language in self.lan_menu:
+        with open(LAN_MENU_PATH, 'w') as f:
+            json.dump(self.lan_menu, f)
 
-            
+
+    def load_lan_menu(self):
+
+        f = open(LAN_MENU_PATH, 'r')
+        self.lan_menu = json.load(f)
+
+
 
 #collecting and adding data to ours clipboards
 def collecting_clipboard_macos():
@@ -119,14 +127,14 @@ def pressing_buttons(key):
         if all(keys in pressed_keys for keys in COMBINATION):
 
             if SYSTEM == "posix":
-                print(LANGUAGE)
-                translated = ai_translation(collecting_clipboard_macos(), LANGUAGE)
+                print(starting_language)
+                translated = ai_translation(collecting_clipboard_macos(), starting_language)
                 copying_to_clipboard_macos(translated)
-                macos_notify("AI Translator", f'Clipboard has been translated to {LANGUAGE}')
+                macos_notify("AI Translator", f'Clipboard has been translated to {starting_language}')
 
             else:
 
-                translated = ai_translation(collecting_clipboard_windows(), LANGUAGE)
+                translated = ai_translation(collecting_clipboard_windows(), starting_language)
                 copying_to_clipboard_win(translated)
 
 
@@ -168,10 +176,8 @@ if __name__ == "__main__":
 
     k_thread = threading.Thread(target=keyboard_listening)
     k_thread.start()
-    app = macOS_app()
+    app = macOS_app(starting_language)
     app.run()
-
-
 
 
 
